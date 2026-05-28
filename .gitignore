@@ -1,0 +1,4 @@
+/money-seconds
+*.exe
+*.test
+.DS_Store

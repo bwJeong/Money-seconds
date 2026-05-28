@@ -1,0 +1,701 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Money Seconds — 초당 누적 이자</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: #131a32;
+      --panel-2: #1a234a;
+      --text: #e6e9f5;
+      --muted: #8892b8;
+      --accent: #7cf5b2;
+      --accent-2: #59c8ff;
+      --danger: #ff6b6b;
+      --warn: #ffd166;
+      --radius: 14px;
+      --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: radial-gradient(1200px 800px at 10% -10%, #1c2654 0%, var(--bg) 60%) fixed;
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR",
+                   "Apple SD Gothic Neo", Roboto, sans-serif;
+      min-height: 100vh;
+    }
+
+    .wrap {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 48px 20px 80px;
+    }
+
+    h1 {
+      font-size: 22px;
+      letter-spacing: -0.01em;
+      margin: 0 0 24px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+    h1 span { color: var(--text); }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: var(--radius);
+      padding: 28px;
+      box-shadow: var(--shadow);
+    }
+
+    /* Form */
+    .field { display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px; }
+    .field label { font-size: 13px; color: var(--muted); }
+    .field input[type="number"],
+    .field input[type="text"] {
+      background: var(--panel-2);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      color: var(--text);
+      padding: 12px 14px;
+      font-size: 16px;
+      outline: none;
+      transition: border-color 0.15s;
+      appearance: none;
+      -webkit-appearance: none;
+    }
+    .field input:focus { border-color: var(--accent-2); }
+
+    .radios { display: flex; gap: 10px; }
+    .radios label {
+      flex: 1;
+      background: var(--panel-2);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      padding: 12px 14px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.15s;
+      font-size: 14px;
+      color: var(--text);
+    }
+    .radios input { display: none; }
+    .radios input:checked + span {
+      color: var(--accent);
+      font-weight: 600;
+    }
+    .radios label:has(input:checked) {
+      border-color: var(--accent);
+      background: rgba(124, 245, 178, 0.08);
+    }
+
+    button.primary {
+      width: 100%;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: #0b1020;
+      border: 0;
+      border-radius: 10px;
+      padding: 14px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 8px;
+      transition: opacity 0.15s, transform 0.05s;
+    }
+    button.primary:hover { opacity: 0.92; }
+    button.primary:active { transform: translateY(1px); }
+    button.primary:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    button.ghost {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    button.ghost:hover { color: var(--text); border-color: rgba(255, 255, 255, 0.25); }
+
+    .error {
+      color: var(--danger);
+      font-size: 13px;
+      min-height: 18px;
+      margin-top: 4px;
+    }
+
+    /* Result */
+    .result .total-label {
+      color: var(--muted);
+      font-size: 13px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .result .total {
+      font-size: clamp(40px, 8vw, 64px);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      line-height: 1.1;
+      margin: 8px 0 6px;
+      font-variant-numeric: tabular-nums;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    .result .per-sec {
+      color: var(--accent);
+      font-size: 18px;
+      font-variant-numeric: tabular-nums;
+      margin-bottom: 28px;
+    }
+
+    .scrubber {
+      margin-bottom: 24px;
+    }
+    .scrubber input[type="range"] {
+      width: 100%;
+      appearance: none;
+      -webkit-appearance: none;
+      background: transparent;
+      height: 24px;
+      margin: 0;
+      padding: 0;
+    }
+    .scrubber input[type="range"]:focus { outline: none; }
+    .scrubber input[type="range"]::-webkit-slider-runnable-track {
+      height: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 2px;
+    }
+    .scrubber input[type="range"]::-moz-range-track {
+      height: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 2px;
+    }
+    .scrubber input[type="range"]::-webkit-slider-thumb {
+      appearance: none;
+      -webkit-appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--accent);
+      border: 0;
+      margin-top: -7px;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+    }
+    .scrubber input[type="range"]::-moz-range-thumb {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--accent);
+      border: 0;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+    }
+    .scrubber-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 8px;
+      min-height: 24px;
+    }
+    .scrubber-hint {
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .scrubber-live-btn {
+      background: transparent;
+      color: var(--accent);
+      border: 1px solid var(--accent);
+      border-radius: 999px;
+      font-size: 12px;
+      padding: 5px 12px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .scrubber-live-btn:hover { background: rgba(124, 245, 178, 0.1); }
+
+    .rates {
+      margin-bottom: 24px;
+    }
+    .rates h3 {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 600;
+      margin: 0 0 10px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .rate-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      padding: 10px 14px;
+      background: var(--panel-2);
+      border-radius: 8px;
+      margin-bottom: 6px;
+      font-variant-numeric: tabular-nums;
+    }
+    .rate-row:last-child { margin-bottom: 0; }
+    .rate-row .k { color: var(--muted); font-size: 13px; }
+    .rate-row .v { font-weight: 600; font-size: 15px; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .stat {
+      background: var(--panel-2);
+      border-radius: 10px;
+      padding: 14px 16px;
+    }
+    .stat .k { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+    .stat .v {
+      font-size: 16px;
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(255, 209, 102, 0.12);
+      color: var(--warn);
+      font-size: 12px;
+      font-weight: 600;
+      margin-left: 10px;
+      vertical-align: middle;
+    }
+    .badge.expired {
+      background: rgba(255, 107, 107, 0.12);
+      color: var(--danger);
+    }
+
+    .hidden { display: none !important; }
+
+    footer {
+      color: var(--muted);
+      font-size: 12px;
+      text-align: center;
+      margin-top: 24px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>💰 <span>Money Seconds</span> — 초마다 쌓이는 이자</h1>
+
+    <!-- 입력 영역 -->
+    <section id="form-card" class="card">
+      <form id="form" autocomplete="off" novalidate>
+        <div class="field">
+          <label for="principal">원금 (원)</label>
+          <input id="principal" name="principal" type="text" inputmode="numeric" autocomplete="off" placeholder="예: 10,000,000" required />
+        </div>
+
+        <div class="field">
+          <label for="rate">연이율 (%)</label>
+          <input id="rate" name="rate" type="number" min="0" step="0.01" placeholder="예: 5" required />
+        </div>
+
+        <div class="field">
+          <label for="expiry-months">만료까지 기간 (개월)</label>
+          <input id="expiry-months" name="expiryMonths" type="number" min="1" step="1" placeholder="예: 12" required />
+        </div>
+
+        <div class="field">
+          <label>이자 방식</label>
+          <div class="radios">
+            <label>
+              <input type="radio" name="mode" value="simple" checked />
+              <span>단리</span>
+            </label>
+            <label>
+              <input type="radio" name="mode" value="compound" />
+              <span>복리</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="error" id="error" aria-live="polite"></div>
+
+        <button class="primary" id="start-btn" type="submit">시작</button>
+      </form>
+    </section>
+
+    <!-- 결과 영역 -->
+    <section id="result-card" class="card result hidden">
+      <div class="total-label">현재 총액 <span id="status-badge"></span></div>
+      <div class="total" id="total">₩0</div>
+      <div class="per-sec" id="per-sec">+ ₩0 / 초</div>
+
+      <div class="scrubber">
+        <input type="range" id="time-slider" min="0" max="0" value="0" step="1" />
+        <div class="scrubber-meta">
+          <span class="scrubber-hint">드래그해서 임의 시점의 누적 상태 보기</span>
+          <button id="scrubber-live" class="scrubber-live-btn hidden" type="button">↺ 현재 시점</button>
+        </div>
+      </div>
+
+      <div class="rates">
+        <h3>단위별 적립 속도</h3>
+        <div class="rate-row"><span class="k">분당</span><span class="v" id="rate-minute">-</span></div>
+        <div class="rate-row"><span class="k">시간당</span><span class="v" id="rate-hour">-</span></div>
+        <div class="rate-row"><span class="k">일당</span><span class="v" id="rate-day">-</span></div>
+        <div class="rate-row"><span class="k">주당</span><span class="v" id="rate-week">-</span></div>
+        <div class="rate-row"><span class="k">월당</span><span class="v" id="rate-month">-</span></div>
+        <div class="rate-row"><span class="k">년당</span><span class="v" id="rate-year">-</span></div>
+      </div>
+
+      <div class="grid">
+        <div class="stat">
+          <div class="k">누적 이자</div>
+          <div class="v" id="interest">₩0</div>
+        </div>
+        <div class="stat">
+          <div class="k">원금</div>
+          <div class="v" id="principal-out">₩0</div>
+        </div>
+        <div class="stat">
+          <div class="k">경과 시간</div>
+          <div class="v" id="elapsed">0초</div>
+        </div>
+        <div class="stat">
+          <div class="k">만료까지</div>
+          <div class="v" id="remaining">-</div>
+        </div>
+      </div>
+
+      <button class="ghost" id="reset-btn" type="button">다시 설정</button>
+    </section>
+
+    <footer>새로고침해도 마지막 입력값은 유지됩니다.</footer>
+  </div>
+
+  <script>
+    const SECONDS_PER_YEAR = 365 * 24 * 3600;
+    const STORAGE_KEY = "money-seconds.input";
+    const TICK_SEC = 1;
+    const TICK_LABEL = "초";
+
+    const PER_UNITS = [
+      { id: "rate-minute", sec: 60 },
+      { id: "rate-hour",   sec: 3600 },
+      { id: "rate-day",    sec: 86400 },
+      { id: "rate-week",   sec: 7 * 86400 },
+      { id: "rate-month",  sec: SECONDS_PER_YEAR / 12 },
+      { id: "rate-year",   sec: SECONDS_PER_YEAR },
+    ];
+
+    const fmtMoney = new Intl.NumberFormat("ko-KR", {
+      style: "currency",
+      currency: "KRW",
+      maximumFractionDigits: 4,
+    });
+    const fmtMoneyCoarse = new Intl.NumberFormat("ko-KR", {
+      style: "currency",
+      currency: "KRW",
+      maximumFractionDigits: 0,
+    });
+    // 단위당 증가율은 복리의 미세 변화를 보여주기 위해 더 높은 정밀도 사용
+    const fmtPerUnit = new Intl.NumberFormat("ko-KR", {
+      style: "currency",
+      currency: "KRW",
+      maximumFractionDigits: 8,
+    });
+
+    const $ = (id) => document.getElementById(id);
+    const els = {
+      formCard: $("form-card"),
+      resultCard: $("result-card"),
+      form: $("form"),
+      principal: $("principal"),
+      rate: $("rate"),
+      expiryMonths: $("expiry-months"),
+      error: $("error"),
+      startBtn: $("start-btn"),
+      resetBtn: $("reset-btn"),
+      total: $("total"),
+      perSec: $("per-sec"),
+      interest: $("interest"),
+      principalOut: $("principal-out"),
+      elapsed: $("elapsed"),
+      remaining: $("remaining"),
+      statusBadge: $("status-badge"),
+      slider: $("time-slider"),
+      scrubberLive: $("scrubber-live"),
+    };
+
+    const perUnitEls = PER_UNITS.map((u) => $(u.id));
+
+    function formatIntWithCommas(numStr) {
+      if (!numStr) return "";
+      return numStr.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    }
+
+    function onPrincipalInput() {
+      const inputEl = els.principal;
+      const oldValue = inputEl.value;
+      const oldCaret = inputEl.selectionStart ?? oldValue.length;
+      const digitsBeforeCaret = oldValue.slice(0, oldCaret).replace(/\D/g, "").length;
+      const digits = oldValue.replace(/\D/g, "");
+      const formatted = formatIntWithCommas(digits);
+      inputEl.value = formatted;
+      // 캐럿 위치 복원: 새 문자열에서 digitsBeforeCaret 만큼의 숫자가 지난 지점
+      let pos = 0, seen = 0;
+      while (pos < formatted.length && seen < digitsBeforeCaret) {
+        if (/\d/.test(formatted[pos])) seen++;
+        pos++;
+      }
+      try { inputEl.setSelectionRange(pos, pos); } catch (_) {}
+    }
+    els.principal.addEventListener("input", onPrincipalInput);
+
+    // 입력값 복원
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
+      if (saved) {
+        if (saved.principal != null) {
+          els.principal.value = formatIntWithCommas(String(Math.trunc(saved.principal)));
+        }
+        if (saved.rate != null) els.rate.value = saved.rate;
+        if (saved.expiryMonths != null) els.expiryMonths.value = saved.expiryMonths;
+        if (saved.mode) {
+          const r = document.querySelector(`input[name="mode"][value="${saved.mode}"]`);
+          if (r) r.checked = true;
+        }
+      }
+    } catch (_) {}
+
+    // 만료 기간 기본값: 12개월 (값이 비어있을 때만)
+    if (!els.expiryMonths.value) {
+      els.expiryMonths.value = "12";
+    }
+
+    function readForm() {
+      const principal = parseFloat(els.principal.value.replace(/,/g, ""));
+      const ratePct = parseFloat(els.rate.value);
+      const expiryMonths = parseInt(els.expiryMonths.value, 10);
+      const mode = document.querySelector('input[name="mode"]:checked').value;
+      return { principal, ratePct, expiryMonths, mode };
+    }
+
+    function validate(input) {
+      if (!Number.isFinite(input.principal) || input.principal <= 0) {
+        return "원금은 0보다 커야 합니다.";
+      }
+      if (!Number.isFinite(input.ratePct) || input.ratePct < 0) {
+        return "이율은 0 이상이어야 합니다.";
+      }
+      if (!Number.isInteger(input.expiryMonths) || input.expiryMonths < 1) {
+        return "만료까지 기간은 1개월 이상의 정수로 입력해 주세요.";
+      }
+      return null;
+    }
+
+    function expiryMsFromMonths(startMs, months) {
+      const d = new Date(startMs);
+      d.setMonth(d.getMonth() + months);
+      return d.getTime();
+    }
+
+    function formatDuration(seconds) {
+      seconds = Math.max(0, Math.floor(seconds));
+      const d = Math.floor(seconds / 86400);
+      const h = Math.floor((seconds % 86400) / 3600);
+      const m = Math.floor((seconds % 3600) / 60);
+      const s = seconds % 60;
+      const parts = [];
+      if (d) parts.push(`${d}일`);
+      if (h || d) parts.push(`${h}시간`);
+      if (m || h || d) parts.push(`${m}분`);
+      parts.push(`${s}초`);
+      return parts.join(" ");
+    }
+
+    // 이자 계산
+    function interestAt(principal, r, tSec, mode) {
+      const years = tSec / SECONDS_PER_YEAR;
+      if (mode === "compound") {
+        return principal * (Math.pow(1 + r, years) - 1);
+      }
+      return principal * r * years;
+    }
+    function totalAt(principal, r, tSec, mode) {
+      return principal + interestAt(principal, r, tSec, mode);
+    }
+
+    let timeoutId = null;
+    let session = null;
+
+    function start(input) {
+      const r = input.ratePct / 100;
+      const startMs = Date.now();
+      const expiryMs = expiryMsFromMonths(startMs, input.expiryMonths);
+      const totalDurSec = (expiryMs - startMs) / 1000;
+      session = {
+        principal: input.principal,
+        r,
+        mode: input.mode,
+        startMs,
+        expiryMs,
+        totalDurSec,
+        unitSec: TICK_SEC,
+        unitLabel: TICK_LABEL,
+        expired: false,
+        manualTSec: null,
+      };
+
+      els.formCard.classList.add("hidden");
+      els.resultCard.classList.remove("hidden");
+      els.principalOut.textContent = fmtMoneyCoarse.format(input.principal);
+      els.statusBadge.innerHTML =
+        `<span class="badge">${input.mode === "compound" ? "복리" : "단리"} · 연 ${input.ratePct}% · ${input.expiryMonths}개월 만기</span>`;
+
+      els.slider.min = "0";
+      els.slider.max = String(Math.floor(totalDurSec));
+      els.slider.value = "0";
+      els.scrubberLive.classList.add("hidden");
+
+      tick();
+      scheduleNext();
+    }
+
+    function tick() {
+      if (!session) return;
+      const now = Date.now();
+      const totalDurSec = session.totalDurSec;
+      const realTSec = Math.min(Math.max(0, (now - session.startMs) / 1000), totalDurSec);
+      const realExpired = now >= session.expiryMs;
+      const isManual = session.manualTSec != null;
+      const tSec = isManual
+        ? Math.min(Math.max(0, session.manualTSec), totalDurSec)
+        : realTSec;
+
+      const interest = interestAt(session.principal, session.r, tSec, session.mode);
+      const total = session.principal + interest;
+
+      els.total.textContent = fmtMoney.format(total);
+      els.interest.textContent = fmtMoney.format(interest);
+
+      // 단위당 증가율: 단리는 상수, 복리는 (t+unit) - t
+      const next = interestAt(session.principal, session.r, tSec + session.unitSec, session.mode);
+      const perUnit = next - interest;
+      els.perSec.textContent = `+ ${fmtPerUnit.format(perUnit)} / ${session.unitLabel}`;
+
+      for (let i = 0; i < PER_UNITS.length; i++) {
+        const el = perUnitEls[i];
+        if (!el) continue;
+        const u = PER_UNITS[i];
+        const v =
+          interestAt(session.principal, session.r, tSec + u.sec, session.mode) -
+          interest;
+        el.textContent = fmtMoneyCoarse.format(Math.floor(v));
+      }
+
+      els.elapsed.textContent = formatDuration(tSec);
+      els.remaining.textContent = tSec >= totalDurSec
+        ? "만료됨"
+        : formatDuration(totalDurSec - tSec);
+
+      if (!isManual) {
+        els.slider.value = String(Math.floor(realTSec));
+      }
+
+      if (realExpired && !session.expired) {
+        session.expired = true;
+        els.statusBadge.innerHTML += ` <span class="badge expired">만료됨</span>`;
+      }
+    }
+
+    function scheduleNext() {
+      if (!session || session.expired) return;
+      const now = Date.now();
+      const periodMs = session.unitSec * 1000;
+      // 시작 시각 기준 다음 단위 경계
+      const k = Math.floor((now - session.startMs) / periodMs) + 1;
+      const nextBoundaryMs = session.startMs + k * periodMs;
+      const targetMs = Math.min(nextBoundaryMs, session.expiryMs);
+      const delay = Math.max(0, targetMs - now);
+      timeoutId = setTimeout(() => {
+        tick();
+        scheduleNext();
+      }, delay);
+    }
+
+    function stop() {
+      if (timeoutId != null) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      session = null;
+    }
+
+    els.form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const input = readForm();
+      const err = validate(input);
+      els.error.textContent = err || "";
+      if (err) return;
+
+      try {
+        localStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify({
+            principal: input.principal,
+            rate: input.ratePct,
+            expiryMonths: input.expiryMonths,
+            mode: input.mode,
+          })
+        );
+      } catch (_) {}
+
+      start(input);
+    });
+
+    els.resetBtn.addEventListener("click", () => {
+      stop();
+      els.resultCard.classList.add("hidden");
+      els.formCard.classList.remove("hidden");
+      els.error.textContent = "";
+      els.statusBadge.innerHTML = "";
+      els.scrubberLive.classList.add("hidden");
+    });
+
+    els.slider.addEventListener("input", () => {
+      if (!session) return;
+      session.manualTSec = parseFloat(els.slider.value);
+      els.scrubberLive.classList.remove("hidden");
+      tick();
+    });
+
+    els.scrubberLive.addEventListener("click", () => {
+      if (!session) return;
+      session.manualTSec = null;
+      els.scrubberLive.classList.add("hidden");
+      tick();
+    });
+
+    // 입력값 변화 시 에러 자동 클리어
+    ["input", "change"].forEach((ev) => {
+      els.form.addEventListener(ev, () => {
+        if (els.error.textContent) els.error.textContent = "";
+      });
+    });
+  </script>
+</body>
+</html>

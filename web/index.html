@@ -264,6 +264,10 @@
       white-space: nowrap;
     }
     .scrubber-live-btn:hover { background: rgba(124, 245, 178, 0.1); }
+    .scrubber-live-btn.is-off {
+      visibility: hidden;
+      pointer-events: none;
+    }
 
     .rates {
       margin-bottom: 24px;
@@ -392,7 +396,7 @@
         <input type="range" id="time-slider" min="0" max="0" value="0" step="1" />
         <div class="scrubber-meta">
           <span class="scrubber-hint">드래그해서 임의 시점의 누적 상태 보기</span>
-          <button id="scrubber-live" class="scrubber-live-btn hidden" type="button">↺ 현재 시점</button>
+          <button id="scrubber-live" class="scrubber-live-btn is-off" type="button">↺ 현재 시점</button>
         </div>
       </div>
 
@@ -633,7 +637,7 @@
       els.slider.min = "0";
       els.slider.max = String(Math.floor(totalDurSec));
       els.slider.value = "0";
-      els.scrubberLive.classList.add("hidden");
+      els.scrubberLive.classList.add("is-off");
 
       tick();
       scheduleNext();
@@ -749,20 +753,20 @@
       els.formCard.classList.remove("hidden");
       els.error.textContent = "";
       els.statusBadge.innerHTML = "";
-      els.scrubberLive.classList.add("hidden");
+      els.scrubberLive.classList.add("is-off");
     });
 
     els.slider.addEventListener("input", () => {
       if (!session) return;
       session.manualTSec = parseFloat(els.slider.value);
-      els.scrubberLive.classList.remove("hidden");
+      els.scrubberLive.classList.remove("is-off");
       tick();
     });
 
     els.scrubberLive.addEventListener("click", () => {
       if (!session) return;
       session.manualTSec = null;
-      els.scrubberLive.classList.add("hidden");
+      els.scrubberLive.classList.add("is-off");
       tick();
     });
 

@@ -401,22 +401,27 @@
       { id: "rate-year",   sec: SECONDS_PER_YEAR },
     ];
 
-    const fmtMoney = new Intl.NumberFormat("ko-KR", {
+    const fmtMoney1 = new Intl.NumberFormat("ko-KR", {
       style: "currency",
       currency: "KRW",
-      maximumFractionDigits: 4,
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
     });
     const fmtMoneyCoarse = new Intl.NumberFormat("ko-KR", {
       style: "currency",
       currency: "KRW",
       maximumFractionDigits: 0,
     });
-    // 단위당 증가율은 복리의 미세 변화를 보여주기 위해 더 높은 정밀도 사용
+    // 적립 속도는 복리의 미세 변화를 보기 위해 최대 8자리까지 표시
     const fmtPerUnit = new Intl.NumberFormat("ko-KR", {
       style: "currency",
       currency: "KRW",
       maximumFractionDigits: 8,
     });
+    // 소수점 첫째 자리에서 버림
+    function floor1(v) {
+      return Math.floor(v * 10) / 10;
+    }
 
     const $ = (id) => document.getElementById(id);
     const els = {
@@ -589,8 +594,8 @@
       const interest = interestAt(session.principal, session.r, tSec, session.mode);
       const total = session.principal + interest;
 
-      els.total.textContent = fmtMoney.format(total);
-      els.interest.textContent = fmtMoney.format(interest);
+      els.total.textContent = fmtMoney1.format(floor1(total));
+      els.interest.textContent = fmtMoney1.format(floor1(interest));
 
       // 단위당 증가율: 단리는 상수, 복리는 (t+unit) - t
       const next = interestAt(session.principal, session.r, tSec + session.unitSec, session.mode);
@@ -604,7 +609,7 @@
         const v =
           interestAt(session.principal, session.r, tSec + u.sec, session.mode) -
           interest;
-        el.textContent = fmtMoneyCoarse.format(Math.floor(v));
+        el.textContent = fmtMoney1.format(floor1(v));
       }
 
       els.elapsed.textContent = formatDuration(tSec);

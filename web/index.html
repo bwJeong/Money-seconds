@@ -134,11 +134,50 @@
     }
 
     /* Result */
+    .total-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
     .result .total-label {
       color: var(--muted);
       font-size: 13px;
       letter-spacing: 0.04em;
       text-transform: uppercase;
+    }
+    .tax-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--panel-2);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--muted);
+      border-radius: 999px;
+      font-size: 11px;
+      padding: 5px 11px;
+      cursor: pointer;
+      transition: all 0.15s;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    .tax-toggle:hover { border-color: rgba(255, 255, 255, 0.2); }
+    .tax-toggle-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.25);
+      transition: background 0.15s;
+    }
+    .tax-toggle[aria-pressed="true"] {
+      color: var(--accent);
+      border-color: var(--accent);
+      background: rgba(124, 245, 178, 0.1);
+    }
+    .tax-toggle[aria-pressed="true"] .tax-toggle-dot {
+      background: var(--accent);
     }
     .result .total {
       font-size: clamp(40px, 8vw, 64px);
@@ -339,7 +378,13 @@
 
     <!-- 결과 영역 -->
     <section id="result-card" class="card result hidden">
-      <div class="total-label">현재 총액 <span id="status-badge"></span></div>
+      <div class="total-header">
+        <div class="total-label">현재 총액 <span id="status-badge"></span></div>
+        <button id="tax-toggle" type="button" class="tax-toggle" aria-pressed="false">
+          <span class="tax-toggle-dot"></span>
+          <span>세금 15.4%</span>
+        </button>
+      </div>
       <div class="total" id="total">₩0</div>
       <div class="per-sec" id="per-sec">+ ₩0 / 초</div>
 
@@ -371,6 +416,14 @@
           <div class="v" id="principal-out">₩0</div>
         </div>
         <div class="stat">
+          <div class="k">최종 이자 (만기)</div>
+          <div class="v" id="final-interest">₩0</div>
+        </div>
+        <div class="stat">
+          <div class="k">최종 금액 (만기)</div>
+          <div class="v" id="final-total">₩0</div>
+        </div>
+        <div class="stat">
           <div class="k">경과 시간</div>
           <div class="v" id="elapsed">0초</div>
         </div>
@@ -391,6 +444,9 @@
     const STORAGE_KEY = "money-seconds.input";
     const TICK_SEC = 1;
     const TICK_LABEL = "초";
+    // 이자소득세 14% + 지방소득세 1.4%
+    const TAX_RATE = 0.154;
+    let taxOn = false;
 
     const PER_UNITS = [
       { id: "rate-minute", sec: 60 },
@@ -438,11 +494,14 @@
       perSec: $("per-sec"),
       interest: $("interest"),
       principalOut: $("principal-out"),
+      finalInterest: $("final-interest"),
+      finalTotal: $("final-total"),
       elapsed: $("elapsed"),
       remaining: $("remaining"),
       statusBadge: $("status-badge"),
       slider: $("time-slider"),
       scrubberLive: $("scrubber-live"),
+      taxToggle: $("tax-toggle"),
     };
 
     const perUnitEls = PER_UNITS.map((u) => $(u.id));
@@ -591,15 +650,26 @@
         ? Math.min(Math.max(0, session.manualTSec), totalDurSec)
         : realTSec;
 
-      const interest = interestAt(session.principal, session.r, tSec, session.mode);
-      const total = session.principal + interest;
+      const interestGross = interestAt(session.principal, session.r, tSec, session.mode);
+      const taxFactor = taxOn ? 1 - TAX_RATE : 1;
+      const interestNet = interestGross * taxFactor;
+      const total = session.principal + interestNet;
 
       els.total.textContent = fmtMoney1.format(floor1(total));
-      els.interest.textContent = fmtMoney1.format(floor1(interest));
+      els.interest.textContent = fmtMoney1.format(floor1(interestNet));
 
-      // 단위당 증가율: 단리는 상수, 복리는 (t+unit) - t
-      const next = interestAt(session.principal, session.r, tSec + session.unitSec, session.mode);
-      const perUnit = next - interest;
+      // 만기 시점의 최종 이자/금액 (세금 토글 반영)
+      const finalInterestGross = interestAt(
+        session.principal, session.r, session.totalDurSec, session.mode
+      );
+      const finalInterest = finalInterestGross * taxFactor;
+      const finalTotal = session.principal + finalInterest;
+      els.finalInterest.textContent = fmtMoney1.format(floor1(finalInterest));
+      els.finalTotal.textContent = fmtMoney1.format(floor1(finalTotal));
+
+      // 단위당 증가율: 단리는 상수, 복리는 (t+unit) - t. 세금 ON 시 세후 적용
+      const nextGross = interestAt(session.principal, session.r, tSec + session.unitSec, session.mode);
+      const perUnit = (nextGross - interestGross) * taxFactor;
       els.perSec.textContent = `+ ${fmtPerUnit.format(perUnit)} / ${session.unitLabel}`;
 
       for (let i = 0; i < PER_UNITS.length; i++) {
@@ -607,8 +677,9 @@
         if (!el) continue;
         const u = PER_UNITS[i];
         const v =
-          interestAt(session.principal, session.r, tSec + u.sec, session.mode) -
-          interest;
+          (interestAt(session.principal, session.r, tSec + u.sec, session.mode) -
+            interestGross) *
+          taxFactor;
         el.textContent = fmtMoney1.format(floor1(v));
       }
 
@@ -693,6 +764,12 @@
       session.manualTSec = null;
       els.scrubberLive.classList.add("hidden");
       tick();
+    });
+
+    els.taxToggle.addEventListener("click", () => {
+      taxOn = !taxOn;
+      els.taxToggle.setAttribute("aria-pressed", taxOn ? "true" : "false");
+      if (session) tick();
     });
 
     // 입력값 변화 시 에러 자동 클리어

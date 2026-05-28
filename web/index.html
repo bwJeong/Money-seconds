@@ -738,7 +738,7 @@
           (interestAt(session.principal, session.r, tSec + u.sec, session.mode) -
             interestGross) *
           taxFactor;
-        el.textContent = fmtMoneyCoarse.format(Math.floor(v));
+        el.textContent = fmtMoney1.format(floor1(v));
       }
 
       els.elapsed.textContent = formatDuration(tSec);

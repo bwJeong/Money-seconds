@@ -190,12 +190,16 @@
       -webkit-background-clip: text;
       background-clip: text;
       color: transparent;
+      white-space: nowrap;
+      overflow: hidden;
     }
     .result .per-sec {
       color: var(--accent);
       font-size: 18px;
       font-variant-numeric: tabular-nums;
       margin-bottom: 28px;
+      white-space: nowrap;
+      overflow: hidden;
     }
 
     .scrubber {
@@ -292,11 +296,11 @@
     }
     .rate-row:last-child { margin-bottom: 0; }
     .rate-row .k { color: var(--muted); font-size: 13px; }
-    .rate-row .v { font-weight: 600; font-size: 15px; }
+    .rate-row .v { font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; min-width: 0; }
 
     .grid {
       display: grid;
-      grid-template-columns: repeat(2, 1fr);
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 12px;
       margin-bottom: 24px;
     }
@@ -304,12 +308,16 @@
       background: var(--panel-2);
       border-radius: 10px;
       padding: 14px 16px;
+      min-width: 0;
+      overflow: hidden;
     }
     .stat .k { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
     .stat .v {
       font-size: 16px;
       font-variant-numeric: tabular-nums;
       font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
     }
 
     .badge {
@@ -336,6 +344,11 @@
       text-align: center;
       margin-top: 24px;
     }
+    footer.notes {
+      text-align: left;
+      line-height: 1.7;
+    }
+    footer.notes div + div { margin-top: 4px; }
   </style>
 </head>
 <body>
@@ -438,9 +451,11 @@
       </div>
 
       <button class="ghost" id="reset-btn" type="button">다시 설정</button>
-    </section>
 
-    <footer>새로고침해도 마지막 입력값은 유지됩니다.</footer>
+      <footer class="notes">
+        <div>· 세금 15.4% = 이자소득세 14% + 지방소득세 1.4%.</div>
+      </footer>
+    </section>
   </div>
 
   <script>
@@ -595,6 +610,45 @@
       return parts.join(" ");
     }
 
+    // 콘텐츠가 컨테이너를 넘으면 폰트 크기를 비율대로 줄여 한 줄 안에 맞춤
+    function fitText(el, minSize) {
+      if (!el || !el.clientWidth) return;
+      el.style.fontSize = "";
+      if (el.scrollWidth > el.clientWidth) {
+        const ratio = el.clientWidth / el.scrollWidth;
+        const cur = parseFloat(getComputedStyle(el).fontSize);
+        const newSize = Math.max(minSize, Math.floor(cur * ratio * 0.98));
+        el.style.fontSize = newSize + "px";
+      }
+    }
+
+    // 모든 동적 값 요소에 일괄 적용. reset → measure → apply 3단계로 reflow 최소화
+    function fitAll() {
+      const fits = [
+        [els.total, 20],
+        [els.perSec, 11],
+        [els.interest, 10],
+        [els.principalOut, 10],
+        [els.finalInterest, 10],
+        [els.finalTotal, 10],
+        [els.elapsed, 10],
+        [els.remaining, 10],
+      ];
+      for (const el of perUnitEls) fits.push([el, 9]);
+
+      for (const [el] of fits) if (el) el.style.fontSize = "";
+      const updates = [];
+      for (const [el, minSize] of fits) {
+        if (!el || !el.clientWidth) continue;
+        if (el.scrollWidth > el.clientWidth) {
+          const ratio = el.clientWidth / el.scrollWidth;
+          const cur = parseFloat(getComputedStyle(el).fontSize);
+          updates.push([el, Math.max(minSize, Math.floor(cur * ratio * 0.98))]);
+        }
+      }
+      for (const [el, size] of updates) el.style.fontSize = size + "px";
+    }
+
     // 이자 계산
     function interestAt(principal, r, tSec, mode) {
       const years = tSec / SECONDS_PER_YEAR;
@@ -660,7 +714,7 @@
       const total = session.principal + interestNet;
 
       els.total.textContent = fmtMoney1.format(floor1(total));
-      els.interest.textContent = fmtMoney1.format(floor1(interestNet));
+      els.interest.textContent = fmtMoneyCoarse.format(Math.floor(interestNet));
 
       // 만기 시점의 최종 이자/금액 (세금 토글 반영)
       const finalInterestGross = interestAt(
@@ -668,8 +722,8 @@
       );
       const finalInterest = finalInterestGross * taxFactor;
       const finalTotal = session.principal + finalInterest;
-      els.finalInterest.textContent = fmtMoney1.format(floor1(finalInterest));
-      els.finalTotal.textContent = fmtMoney1.format(floor1(finalTotal));
+      els.finalInterest.textContent = fmtMoneyCoarse.format(Math.floor(finalInterest));
+      els.finalTotal.textContent = fmtMoneyCoarse.format(Math.floor(finalTotal));
 
       // 단위당 증가율: 단리는 상수, 복리는 (t+unit) - t. 세금 ON 시 세후 적용
       const nextGross = interestAt(session.principal, session.r, tSec + session.unitSec, session.mode);
@@ -684,7 +738,7 @@
           (interestAt(session.principal, session.r, tSec + u.sec, session.mode) -
             interestGross) *
           taxFactor;
-        el.textContent = fmtMoney1.format(floor1(v));
+        el.textContent = fmtMoneyCoarse.format(Math.floor(v));
       }
 
       els.elapsed.textContent = formatDuration(tSec);
@@ -700,6 +754,8 @@
         session.expired = true;
         els.statusBadge.innerHTML += ` <span class="badge expired">만료됨</span>`;
       }
+
+      fitAll();
     }
 
     function scheduleNext() {
@@ -774,6 +830,10 @@
       taxOn = !taxOn;
       els.taxToggle.setAttribute("aria-pressed", taxOn ? "true" : "false");
       if (session) tick();
+    });
+
+    window.addEventListener("resize", () => {
+      if (session) fitAll();
     });
 
     // 입력값 변화 시 에러 자동 클리어
